@@ -11,14 +11,13 @@ struct ImDrawList;
 class Visuals : public IManagedClass {
 public:
     void draw(ImDrawList* drawList);
-    void getAndDrawCursor(ImDrawList* drawList);
+    void drawRealCursor(ImDrawList* drawList);
     void drawAssistedCursor(ImDrawList* drawList);
 
 private:
-    static constexpr float kAssistFov = 69.f;
-    static constexpr float kAssistStrength = 0.75f;
+    static constexpr float kAssistZoneRadius = 69.f;
 
-    ImVec2 cursorPosition{};
+    ImVec2 realCursorPosition{};
 };
 
 #endif // VISUALS_HPP

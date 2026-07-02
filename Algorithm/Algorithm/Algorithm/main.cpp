@@ -14,8 +14,7 @@ int main() {
 
     if (!classManager.init()) return 1;
 
-    while (globals.overlay->isRunning())
-        globals.overlay->update();
+    while (globals.overlay->isRunning()) globals.overlay->update();
 
     classManager.deinit();
     return 0;
