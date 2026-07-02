@@ -27,8 +27,7 @@ void Visuals::draw(ImDrawList* drawList) {
     const glm::vec2 mousePosition(realCursorPosition.x, realCursorPosition.y);
     updateSnapDetection(mousePosition, ImGui::GetIO().DeltaTime);
 
-    drawList->AddCircle(targetCenter, getAssistFov(), kFovCircleColor, 0, kFovCircleThickness);
-    drawList->AddCircle(targetCenter, getCircleSize(), kCircleSizeColor, 0, 1.5f);
+    drawList->AddCircle(targetCenter, getCircleSize(), kFovCircleColor, 0, 1.5f);
     drawAssistedCursor(drawList);
     drawSnapDetectionLog(drawList);
 }

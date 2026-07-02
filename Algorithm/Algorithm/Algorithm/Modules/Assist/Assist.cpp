@@ -20,11 +20,7 @@ void Assist::resetState() {
     hasFrameHistory_ = false;
 }
 
-void Assist::saveFrameState(
-    const glm::vec2& mousePosition,
-    const glm::vec2& assistPosition,
-    const glm::vec2& mouseVelocity)
-{
+void Assist::saveFrameState(const glm::vec2& mousePosition, const glm::vec2& assistPosition, const glm::vec2& mouseVelocity){
     previousMousePosition_ = mousePosition;
     previousAssistPosition_ = assistPosition;
     previousMouseVelocity_ = mouseVelocity;
@@ -37,122 +33,162 @@ glm::vec2 Assist::normalizeOrZero(const glm::vec2& vector) {
     return vector / length;
 }
 
-float Assist::computeCircleSuggestionWeight(float distanceToTarget, float fovRadius, float circleRadius) const {
-    if (circleRadius <= std::numeric_limits<float>::epsilon()) return 0.f;
-
-    const float distanceOnCircle = std::clamp(distanceToTarget / circleRadius, 0.f, 1.f);
-
-    // float circleSuggestionWeight = std::sin(distanceOnCircle * kPi);
-
-    // if (distanceToTarget <= circleRadius) return circleSuggestionWeight;
-
-    if (fovRadius <= circleRadius) return 0.f;
-
-    const float outsideDistance = distanceToTarget - circleRadius;
-    const float outsideRange = fovRadius - circleRadius;
-    const float outsideFalloff = 1.f - std::clamp(outsideDistance / outsideRange, 0.f, 1.f);
-
-    // circleSuggestionWeight * ...
-    return outsideFalloff * 0.45f;
+float Assist::smoothStep01(float value) {
+    const float clampedValue = std::clamp(value, 0.f, 1.f);
+    return clampedValue * clampedValue * (3.f - 2.f * clampedValue);
 }
 
-float Assist::computePredictionWeight(const glm::vec2& mousePosition, const glm::vec2& targetCenter, const glm::vec2& mouseVelocity, float mouseSpeed, float distanceToTarget) const {
-    if (mouseSpeed <= settings_.minSwipeSpeed) return 0.f;
+bool Assist::shouldApplyAssist(const AssistFrameContext& context) const {
+    if (!context.isInsideFov) return false;
 
-    const glm::vec2 directionToTarget = targetCenter - mousePosition;
-    if (glm::length(directionToTarget) <= std::numeric_limits<float>::epsilon()) return 0.f;
+    if (glm::length(context.previousAssistOffset) > kMinimumAssistThreshold) return true;
 
-    const float movementTowardTarget = glm::dot(normalizeOrZero(mouseVelocity), normalizeOrZero(directionToTarget));
+    if (computeDistanceWeight(context) > kMinimumAssistThreshold) return true;
 
-    if (movementTowardTarget <= 0.f) return 0.f;
+    return computePredictionWeight(context) > kMinimumAssistThreshold;
+}
 
-    const float flickIntensity = std::clamp(movementTowardTarget * (mouseSpeed / settings_.minSwipeSpeed), 0.f, 1.f);
+glm::vec2 Assist::computeAssistTargetOnRadius(const AssistFrameContext& context) const {
+    if (context.isInsideAssistDisk) return context.mousePosition;
+
+    if (context.distanceToCenter <= std::numeric_limits<float>::epsilon()) return context.targetCenter + glm::vec2(settings_.circleSize, 0.f);
+
+    const glm::vec2 directionFromCenter = normalizeOrZero(context.mousePosition - context.targetCenter);
+    return context.targetCenter + directionFromCenter * settings_.circleSize;
+}
+
+float Assist::computeDistanceWeight(const AssistFrameContext& context) const {
+    if (context.isInsideAssistDisk) return 0.f;
+
+    if (settings_.fov <= settings_.circleSize) return 0.f;
+
+    const float distanceBeyondAssistDisk = context.distanceToCenter - settings_.circleSize;
+    const float activationRingWidth = settings_.fov - settings_.circleSize;
+    const float normalizedDistance = std::clamp(distanceBeyondAssistDisk / activationRingWidth, 0.f, 1.f);
+
+    return smoothStep01(normalizedDistance);
+}
+
+float Assist::computePredictionWeight(const AssistFrameContext& context) const {
+    if (context.mouseSpeed <= settings_.minSwipeSpeed) return 0.f;
+
+    const glm::vec2 directionToAssistArea = computeAssistTargetOnRadius(context) - context.mousePosition;
+    if (glm::length(directionToAssistArea) <= std::numeric_limits<float>::epsilon()) return 0.f;
+
+    const float movementTowardAssistArea = glm::dot(normalizeOrZero(context.mouseVelocity), normalizeOrZero(directionToAssistArea));
+
+    if (movementTowardAssistArea <= 0.f) return 0.f;
+
+    const float flickIntensity = std::clamp(movementTowardAssistArea * (context.mouseSpeed / settings_.minSwipeSpeed), 0.f, 1.f);
 
     float predictionWeight = flickIntensity * settings_.flickBoost;
 
-    const glm::vec2 predictedMousePosition = mousePosition + mouseVelocity * settings_.lookahead;
-    const float predictedDistanceToTarget = glm::distance(predictedMousePosition, targetCenter);
+    const glm::vec2 predictedMousePosition = context.mousePosition + context.mouseVelocity * settings_.lookahead;
+    const float predictedDistanceToCenter = glm::distance(predictedMousePosition, context.targetCenter);
+    const float currentDistanceToCenter = context.distanceToCenter;
 
-    if (predictedDistanceToTarget < distanceToTarget) predictionWeight = std::clamp(predictionWeight + settings_.flickBoost * 0.25f, 0.f, 1.f);
+    if (predictedDistanceToCenter < currentDistanceToCenter) predictionWeight = std::clamp(predictionWeight + settings_.flickBoost * 0.25f, 0.f, 1.f);
 
     return predictionWeight;
 }
 
-float Assist::computeNaturalMovementPreserve(const glm::vec2& mouseVelocity, float mouseSpeed) const {
-    if (mouseSpeed <= std::numeric_limits<float>::epsilon()) return 0.f;
+float Assist::computeNaturalMovementPreserve(const AssistFrameContext& context) const {
+    if (context.mouseSpeed <= std::numeric_limits<float>::epsilon()) return 0.f;
 
     const float previousSpeed = glm::length(previousMouseVelocity_);
-    if (previousSpeed <= std::numeric_limits<float>::epsilon()) return std::clamp(mouseSpeed / kNaturalSpeedReference, 0.f, 0.35f);
+    if (previousSpeed <= std::numeric_limits<float>::epsilon()) return std::clamp(context.mouseSpeed / kNaturalSpeedReference, 0.f, 0.35f);
 
-    const float velocityContinuity = glm::dot(normalizeOrZero(mouseVelocity), normalizeOrZero(previousMouseVelocity_));
+    const float velocityContinuity = glm::dot(normalizeOrZero(context.mouseVelocity), normalizeOrZero(previousMouseVelocity_));
 
     const float smoothMovementBlend = std::clamp((velocityContinuity + 1.f) * 0.5f, 0.f, 1.f);
-    const float speedBlend = std::clamp(mouseSpeed / kNaturalSpeedReference, 0.f, 1.f);
+    const float speedBlend = std::clamp(context.mouseSpeed / kNaturalSpeedReference, 0.f, 1.f);
 
     return smoothMovementBlend * speedBlend;
 }
 
-glm::vec2 Assist::computeDesiredOffsetInZone(const glm::vec2& mousePosition, const glm::vec2& targetCenter, const glm::vec2& mouseVelocity, float mouseSpeed, float distanceToTarget) const {
-    const float fovRadius = settings_.fov;
-    const float circleRadius = settings_.circleSize;
+float Assist::computeRadiusBrakeFactor(const AssistFrameContext& context) const {
+    if (context.isInsideAssistDisk) return settings_.radiusBrakeStrength;
 
-    const float circleSuggestionWeight = computeCircleSuggestionWeight(distanceToTarget, fovRadius, circleRadius);
+    if (settings_.fov <= settings_.circleSize) return 1.f;
 
-    const float predictionWeight = computePredictionWeight(mousePosition, targetCenter, mouseVelocity, mouseSpeed, distanceToTarget);
+    const float distanceBeyondAssistDisk = context.distanceToCenter - settings_.circleSize;
+    const float activationRingWidth = settings_.fov - settings_.circleSize;
+    const float depthInActivationRing = std::clamp(distanceBeyondAssistDisk / activationRingWidth, 0.f, 1.f);
 
-    const float naturalMovementPreserve = computeNaturalMovementPreserve(mouseVelocity, mouseSpeed);
-
-    float combinedPull = (circleSuggestionWeight * settings_.circleSuggestionInfluence + predictionWeight * settings_.predictionInfluence) * settings_.magnetStrength;
-
-    combinedPull *= 1.f - naturalMovementPreserve * settings_.naturalMovementInfluence;
-    combinedPull = std::clamp(combinedPull, 0.f, settings_.maxPull);
-
-    if (combinedPull <= std::numeric_limits<float>::epsilon()) return glm::vec2(0.f);
-
-    const glm::vec2 directionToTarget = normalizeOrZero(targetCenter - mousePosition);
-    const float pullDistance = combinedPull * distanceToTarget;
-    glm::vec2 desiredAssistOffset = directionToTarget * pullDistance;
-
-    if (mouseSpeed <= settings_.minSwipeSpeed) return desiredAssistOffset;
-
-    const glm::vec2 directionAwayFromTarget = mousePosition - targetCenter;
-    if (glm::length(directionAwayFromTarget) <= std::numeric_limits<float>::epsilon()) return desiredAssistOffset;
-
-    const glm::vec2 awayDirection = normalizeOrZero(directionAwayFromTarget);
-    const float radialAwayMovement = std::max(glm::dot(normalizeOrZero(mouseVelocity), awayDirection), 0.f);
-
-    if (radialAwayMovement <= kRadialReleaseThreshold) return desiredAssistOffset;
-
-    const float distanceFromCenterRatio = std::clamp(distanceToTarget / std::max(fovRadius, 1.f), 0.f, 1.f);
-    const float releaseAmount = radialAwayMovement * distanceFromCenterRatio * settings_.releaseStrength;
-
-    return glm::mix(desiredAssistOffset, glm::vec2(0.f), releaseAmount);
+    return std::clamp(settings_.radiusBrakeStrength + depthInActivationRing * (1.f - settings_.radiusBrakeStrength), settings_.radiusBrakeStrength, 1.f);
 }
 
-float Assist::computeOffsetBlendRate(bool isInsideAssistZone, const glm::vec2& mousePosition, const glm::vec2& targetCenter, const glm::vec2& mouseVelocity, float mouseSpeed, float deltaSeconds) const {
-    if (!isInsideAssistZone) return std::clamp(settings_.syncSpeed * deltaSeconds, 0.f, 1.f);
+float Assist::computeOffsetReleaseAmount(const AssistFrameContext& context) const {
+    if (context.mouseSpeed <= settings_.minSwipeSpeed) return 0.f;
 
-    float offsetBlendRate = std::clamp(settings_.smoothing * deltaSeconds, 0.f, 1.f);
+    const glm::vec2 directionAwayFromCenter = context.mousePosition - context.targetCenter;
+    if (glm::length(directionAwayFromCenter) <= std::numeric_limits<float>::epsilon()) return 0.f;
 
-    if (mouseSpeed <= settings_.minSwipeSpeed) return offsetBlendRate;
+    const glm::vec2 awayDirection = normalizeOrZero(directionAwayFromCenter);
+    const float radialAwayMovement = std::max(glm::dot(normalizeOrZero(context.mouseVelocity), awayDirection), 0.f);
 
-    const glm::vec2 directionAwayFromTarget = mousePosition - targetCenter;
-    if (glm::length(directionAwayFromTarget) <= std::numeric_limits<float>::epsilon()) return offsetBlendRate;
+    if (radialAwayMovement <= kRadialReleaseThreshold) return 0.f;
 
-    const glm::vec2 awayDirection = normalizeOrZero(directionAwayFromTarget);
-    const float radialAwayMovement = std::max(glm::dot(normalizeOrZero(mouseVelocity), awayDirection), 0.f);
+    const float distanceFromCenterRatio = std::clamp(context.distanceToCenter / std::max(settings_.fov, 1.f), 0.f, 1.f);
+    return radialAwayMovement * distanceFromCenterRatio * settings_.offsetRelease;
+}
 
-    if (radialAwayMovement >= kTangentialSwipeThreshold) return offsetBlendRate;
+float Assist::computeOffsetUpdateRate(const AssistFrameContext& context, float correctionStrength) const {
+    if (correctionStrength <= kMinimumAssistThreshold) return std::clamp(settings_.offsetDecay * context.deltaSeconds, 0.f, 1.f);
+
+    float updateRate = std::clamp(settings_.offsetSmoothing * context.deltaSeconds, 0.f, 1.f);
+    updateRate *= computeRadiusBrakeFactor(context);
+
+    if (context.mouseSpeed <= settings_.minSwipeSpeed) return updateRate;
+
+    const glm::vec2 directionAwayFromCenter = context.mousePosition - context.targetCenter;
+    if (glm::length(directionAwayFromCenter) <= std::numeric_limits<float>::epsilon()) return updateRate;
+
+    const glm::vec2 awayDirection = normalizeOrZero(directionAwayFromCenter);
+    const float radialAwayMovement = std::max(glm::dot(normalizeOrZero(context.mouseVelocity), awayDirection), 0.f);
+
+    if (radialAwayMovement >= kTangentialSwipeThreshold) return updateRate;
 
     const float tangentialSwipeAmount = 1.f - radialAwayMovement;
-    offsetBlendRate *= 1.f - tangentialSwipeAmount * settings_.friction;
+    updateRate *= 1.f - tangentialSwipeAmount * settings_.friction;
 
-    return offsetBlendRate;
+    return updateRate;
+}
+
+glm::vec2 Assist::decayOffset(const AssistFrameContext& context, float decayRate) const {
+    const float clampedDecayRate = std::clamp(decayRate * context.deltaSeconds, 0.f, 1.f);
+    return glm::mix(context.previousAssistOffset, glm::vec2(0.f), clampedDecayRate);
+}
+
+glm::vec2 Assist::computeDesiredOffset(const AssistFrameContext& context) const {
+    if (context.isInsideAssistDisk) return decayOffset(context, settings_.insideOffsetDecay);
+
+    const glm::vec2 assistTargetOnRadius = computeAssistTargetOnRadius(context);
+    const glm::vec2 correctionVector = assistTargetOnRadius - context.mousePosition;
+    const float correctionDistance = glm::length(correctionVector);
+
+    if (correctionDistance <= std::numeric_limits<float>::epsilon()) return glm::vec2(0.f);
+
+    const float distanceWeight = computeDistanceWeight(context);
+    const float predictionWeight = computePredictionWeight(context);
+    const float naturalMovementPreserve = computeNaturalMovementPreserve(context);
+
+    float correctionStrength = distanceWeight * settings_.assistStrength + predictionWeight * settings_.predictionInfluence;
+    correctionStrength *= 1.f - naturalMovementPreserve * settings_.naturalMovementInfluence;
+    correctionStrength = std::clamp(correctionStrength, 0.f, settings_.maxOffsetFraction);
+
+    if (correctionStrength <= kMinimumAssistThreshold) return decayOffset(context, settings_.insideOffsetDecay);
+
+    glm::vec2 desiredOffset = normalizeOrZero(correctionVector) * correctionDistance * correctionStrength;
+
+    const float releaseAmount = computeOffsetReleaseAmount(context);
+    if (releaseAmount <= 0.f) return desiredOffset;
+
+    return glm::mix(desiredOffset, glm::vec2(0.f), releaseAmount);
 }
 
 glm::vec2 Assist::process(const glm::vec2& mousePosition, const glm::vec2& targetCenter, float deltaTime) {
     const float deltaSeconds = std::max(deltaTime, kMinDeltaSeconds);
-    const float fovRadius = settings_.fov;
 
     if (!hasFrameHistory_) {
         saveFrameState(mousePosition, mousePosition, glm::vec2(0.f));
@@ -161,26 +197,40 @@ glm::vec2 Assist::process(const glm::vec2& mousePosition, const glm::vec2& targe
     }
 
     const glm::vec2 mouseVelocity = (mousePosition - previousMousePosition_) / deltaSeconds;
-    const float mouseSpeed = glm::length(mouseVelocity);
-    const float distanceToTarget = glm::distance(mousePosition, targetCenter);
-    const bool isInsideAssistZone = distanceToTarget <= fovRadius;
-    const glm::vec2 previousAssistOffset = previousAssistPosition_ - previousMousePosition_;
+    const float distanceToCenter = glm::distance(mousePosition, targetCenter);
 
-    if (!isInsideAssistZone) {
-        const float syncBlendRate = std::clamp(settings_.syncSpeed * deltaSeconds, 0.f, 1.f);
-        const glm::vec2 syncedAssistOffset = glm::mix(previousAssistOffset, glm::vec2(0.f), syncBlendRate);
-        const glm::vec2 assistPosition = mousePosition + syncedAssistOffset;
+    AssistFrameContext context{};
+    context.mousePosition = mousePosition;
+    context.targetCenter = targetCenter;
+    context.mouseVelocity = mouseVelocity;
+    context.previousAssistOffset = previousAssistPosition_ - previousMousePosition_;
+    context.mouseSpeed = glm::length(mouseVelocity);
+    context.distanceToCenter = distanceToCenter;
+    context.deltaSeconds = deltaSeconds;
+    context.isInsideFov = distanceToCenter <= settings_.fov;
+    context.isInsideAssistDisk = distanceToCenter <= settings_.circleSize;
+
+    if (!context.isInsideFov) {
+        const glm::vec2 decayedOffset = decayOffset(context, settings_.offsetDecay);
+        const glm::vec2 assistPosition = mousePosition + decayedOffset;
 
         saveFrameState(mousePosition, assistPosition, mouseVelocity);
         return assistPosition;
     }
 
-    const glm::vec2 desiredAssistOffset = computeDesiredOffsetInZone(mousePosition, targetCenter, mouseVelocity, mouseSpeed, distanceToTarget);
+    if (!shouldApplyAssist(context)) {
+        const glm::vec2 decayedOffset = decayOffset(context, settings_.offsetDecay);
+        const glm::vec2 assistPosition = mousePosition + decayedOffset;
 
-    const float offsetBlendRate = computeOffsetBlendRate(isInsideAssistZone, mousePosition, targetCenter, mouseVelocity, mouseSpeed, deltaSeconds);
+        saveFrameState(mousePosition, assistPosition, mouseVelocity);
+        return assistPosition;
+    }
 
-    const glm::vec2 blendedAssistOffset = glm::mix(previousAssistOffset, desiredAssistOffset, offsetBlendRate);
-    const glm::vec2 assistPosition = mousePosition + blendedAssistOffset;
+    const glm::vec2 desiredOffset = computeDesiredOffset(context);
+    const float correctionStrength = computeDistanceWeight(context) + computePredictionWeight(context);
+    const float offsetUpdateRate = computeOffsetUpdateRate(context, correctionStrength);
+    const glm::vec2 blendedOffset = glm::mix(context.previousAssistOffset, desiredOffset, offsetUpdateRate);
+    const glm::vec2 assistPosition = mousePosition + blendedOffset;
 
     saveFrameState(mousePosition, assistPosition, mouseVelocity);
     return assistPosition;
