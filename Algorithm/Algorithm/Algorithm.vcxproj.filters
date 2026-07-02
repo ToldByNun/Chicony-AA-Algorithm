@@ -13,5 +13,63 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Engine">
+      <UniqueIdentifier>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engine\ImGui">
+      <UniqueIdentifier>{B2C3D4E5-F6A7-8901-BCDE-F12345678901}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Manager">
+      <UniqueIdentifier>{C3D4E5F6-A7B8-9012-CDEF-123456789012}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Modules">
+      <UniqueIdentifier>{D4E5F6A7-B8C9-0123-DEF0-234567890123}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Algorithm\main.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
+    <ClCompile Include="Algorithm\Manager\Globals\Globals.cpp">
+      <Filter>Manager</Filter>
+    </ClCompile>
+    <ClCompile Include="Algorithm\Modules\Overlay\Overlay.cpp">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="Algorithm\Engine\ImGui\imgui.cpp">
+      <Filter>Engine\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="Algorithm\Engine\ImGui\imgui_draw.cpp">
+      <Filter>Engine\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="Algorithm\Engine\ImGui\imgui_tables.cpp">
+      <Filter>Engine\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="Algorithm\Engine\ImGui\imgui_widgets.cpp">
+      <Filter>Engine\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="Algorithm\Engine\ImGui\imgui_impl_dx11.cpp">
+      <Filter>Engine\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="Algorithm\Engine\ImGui\imgui_impl_win32.cpp">
+      <Filter>Engine\ImGui</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Algorithm\Manager\Globals\Globals.hpp">
+      <Filter>Manager</Filter>
+    </ClInclude>
+    <ClInclude Include="Algorithm\Manager\Classmanager\Classmanager.hpp">
+      <Filter>Manager</Filter>
+    </ClInclude>
+    <ClInclude Include="Algorithm\Modules\Overlay\Overlay.hpp">
+      <Filter>Modules</Filter>
+    </ClInclude>
+    <ClInclude Include="Algorithm\Engine\types.hpp">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="Algorithm\Engine\ImGui\Custom\ColorPicker.hpp">
+      <Filter>Engine\ImGui</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

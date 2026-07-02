@@ -51,7 +51,7 @@ struct AimbotSettings {
 };
 
 struct AppSettings {
-    bool menuOpen = true;
+    bool menuOpen = false;
     EspSettings esp{};
     AimbotSettings aimbot{};
 };
