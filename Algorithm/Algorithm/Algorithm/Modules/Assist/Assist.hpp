@@ -7,59 +7,84 @@
 class Assist : public IManagedClass {
 public:
     struct Settings {
-        // Max pull toward target at center of assist zone (0 = none, 1 = full snap to target).
-        float magnetStrength = 1.f;
+        // Hard outer assist boundary in pixels. Outside = 1:1 mouse pass-through.
+        float fov = 200.f;
 
-        // Slows offset updates during tangential swipes so blue stays near target while orange moves on.
-        float friction = 0.65f;
+        // Suggested target circle radius in pixels. Shapes soft edge weights only, not a hard clip.
+        float circleSize = 69.f;
 
-        // Inner radius (px) around target where extra sticky pull is applied.
-        float stickyRadius = 25.f;
+        // Global scale for assist pull strength.
+        float magnetStrength = 2.45f;
 
-        // How strongly blue is pulled to target center inside stickyRadius.
-        float stickyStrength = 0.7f;
+        // Upper cap for how much of the remaining distance can be pulled per frame (prevents hard center snap).
+        float maxPull = 0.35f;
 
-        // Prediction time window (seconds): estimates where orange will be next frame.
+        // How much the soft circle-size curve contributes to pull.
+        float circleSuggestionInfluence = 0.4f;
+
+        // How much prediction / flick intent contributes to pull.
+        float predictionInfluence = 0.65f;
+
+        // How much smooth natural mouse movement reduces assist (higher = more human-like drift).
+        float naturalMovementInfluence = 0.55f;
+
+        // Slows offset updates during tangential swipes so blue can linger near target briefly.
+        float friction = 0.45f;
+
+        // Prediction time window in seconds.
         float lookahead = 0.1f;
 
-        // Extra magnetism when flicking toward target or when predicted path gets closer.
-        float flickBoost = 0.3f;
+        // Extra prediction boost when moving toward target.
+        float flickBoost = 0.22f;
 
-        // Minimum mouse speed (px/s) before flick detection and friction logic activate.
+        // Minimum mouse speed (px/s) before swipe / flick logic activates.
         float minSwipeSpeed = 80.f;
 
-        // How fast the assist offset follows magnetism while inside the zone (higher = snappier).
-        float smoothing = 14.f;
+        // How fast assist offset follows desired offset inside the zone (lower = softer).
+        float smoothing = 8.f;
 
-        // How fast blue re-syncs to orange after leaving the assist zone (higher = faster catch-up).
-        float syncSpeed = 20.f;
+        // How fast blue re-syncs to orange after leaving the assist zone.
+        float syncSpeed = 5.f;
 
-        // How early offset is released when pulling mouse radially away from target (0-1).
+        // How early offset is released when pulling radially away from target (0-1).
         float releaseStrength = 0.85f;
     };
 
     bool init() override;
     void deinit() override;
 
-    glm::vec2 process(const glm::vec2& mousePosition, const glm::vec2& targetCenter, float assistZoneRadius, float deltaTime);
+    glm::vec2 process(const glm::vec2& mousePosition, const glm::vec2& targetCenter, float deltaTime);
 
     Settings& settings() { return settings_; }
     const Settings& settings() const { return settings_; }
 
 private:
-    static float computeMagnetPull(float distanceToTarget, float assistZoneRadius);
     static glm::vec2 normalizeOrZero(const glm::vec2& vector);
-    void resetState();
-    void saveFrameState(const glm::vec2& mousePosition, const glm::vec2& assistPosition);
 
-    glm::vec2 computeDesiredOffsetInZone(const glm::vec2& mousePosition, const glm::vec2& targetCenter, const glm::vec2& mouseVelocity, float mouseSpeed, float distanceToTarget, float assistZoneRadius) const;
+    float computeCircleSuggestionWeight(float distanceToTarget, float fovRadius, float circleRadius) const;
+    float computePredictionWeight(const glm::vec2& mousePosition, const glm::vec2& targetCenter, const glm::vec2& mouseVelocity, float mouseSpeed, float distanceToTarget) const;
+
+    float computeNaturalMovementPreserve(const glm::vec2& mouseVelocity, float mouseSpeed) const;
+
+    void resetState();
+    void saveFrameState(const glm::vec2& mousePosition, const glm::vec2& assistPosition, const glm::vec2& mouseVelocity);
+
+    glm::vec2 computeDesiredOffsetInZone(const glm::vec2& mousePosition, const glm::vec2& targetCenter, const glm::vec2& mouseVelocity, float mouseSpeed, float distanceToTarget) const;
 
     float computeOffsetBlendRate(bool isInsideAssistZone, const glm::vec2& mousePosition, const glm::vec2& targetCenter, const glm::vec2& mouseVelocity, float mouseSpeed, float deltaSeconds) const;
 
     Settings settings_{};
     glm::vec2 previousMousePosition_{0.f};
     glm::vec2 previousAssistPosition_{0.f};
+    glm::vec2 previousMouseVelocity_{0.f};
     bool hasFrameHistory_ = false;
+
+private:
+    float kMinDeltaSeconds = 1.f / 1000.f;
+    float kRadialReleaseThreshold = 0.1f;
+    float kTangentialSwipeThreshold = 0.3f;
+    float kNaturalSpeedReference = 220.f;
+    float kPi = 3.14159265358979323846f;
 };
 
 #endif // ASSIST_HPP

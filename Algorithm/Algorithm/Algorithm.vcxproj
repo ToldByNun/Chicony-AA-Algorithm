@@ -135,6 +135,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Algorithm\Engine\CircleGuardSnapping\CircleGuardSnapping.cpp" />
     <ClCompile Include="Algorithm\Engine\glm\detail\glm.cpp" />
     <ClCompile Include="Algorithm\Engine\glm\glm.cppm" />
     <ClCompile Include="Algorithm\main.cpp" />
@@ -150,6 +151,7 @@
     <ClCompile Include="Algorithm\Engine\ImGui\imgui_impl_win32.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Algorithm\Engine\CircleGuardSnapping\CircleGuardSnapping.hpp" />
     <ClInclude Include="Algorithm\Engine\glm\common.hpp" />
     <ClInclude Include="Algorithm\Engine\glm\detail\compute_common.hpp" />
     <ClInclude Include="Algorithm\Engine\glm\detail\compute_vector_decl.hpp" />
