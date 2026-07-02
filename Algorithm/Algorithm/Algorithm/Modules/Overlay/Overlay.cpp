@@ -1,6 +1,7 @@
 #include "Overlay.hpp"
 
 #include "../../Manager/Globals/Globals.hpp"
+#include "../Visuals/Visuals.hpp"
 #include "../../Engine/ImGui/imgui.h"
 #include "../../Engine/ImGui/imgui_impl_dx11.h"
 #include "../../Engine/ImGui/imgui_impl_win32.h"
@@ -70,7 +71,10 @@ void Overlay::update() {
     renderFrame();
 }
 
-void Overlay::onDraw(ImDrawList* /*drawList*/) {}
+void Overlay::onDraw(ImDrawList* drawList) {
+    if (globals.visuals)
+        globals.visuals->draw(drawList);
+}
 
 bool Overlay::createWindow() {
     WNDCLASSEXW wc{};

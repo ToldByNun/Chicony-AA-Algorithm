@@ -39,4 +39,4 @@ private:
     bool running_ = false;
 };
 
-#endif
+#endif // OVERLAY_HPP
