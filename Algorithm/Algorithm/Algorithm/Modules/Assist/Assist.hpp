@@ -13,11 +13,14 @@ public:
         // Assist area radius. Target is treated as a circle, not a center point.
         float circleSize = 69.f;
 
-        // Global scale for distance-based correction strength.
+        // Global scale for distance-based correction strength (1 = full pull toward assist edge).
         float assistStrength = 1.5f;
 
-        // Max offset as a fraction of the remaining correction distance per frame target.
-        float maxOffsetFraction = 0.4f;
+        // Optional cap: max offset as a fraction of remaining distance to assist edge (0 = disabled).
+        float maxOffsetFraction = 0.f;
+
+        // Hard cap on assist offset length in pixels (0 = no cap). Does not scale strength.
+        float maxOffsetPixels = 0.f;
 
         // How much prediction contributes on top of distance weighting.
         float predictionInfluence = 0.6f;
@@ -28,11 +31,23 @@ public:
         // Slows offset updates near the assist radius edge (humanized entry braking).
         float radiusBrakeStrength = 0.65f;
 
+        // How quickly assist ramps in after crossing the FOV boundary (mirrors exit decay feel).
+        float fovEntryRamp = 3.f;
+
+        // Max extra entry ramp from inward velocity (0 = ignore velocity, 0.35 = up to +35%).
+        float fovEntryVelocityBoost = 0.35f;
+
+        // Reference inward speed (px/s) for velocity-based entry ramp.
+        float fovEntryVelocityReference = 300.f;
+
         // Prediction lookahead window in seconds.
         float lookahead = 0.1f;
 
         // Extra boost when flicking toward the assist area.
         float flickBoost = 0.25f;
+
+        // Minimum cursor speed (px/s) required to update the offset. Below = offset freezes in place.
+        float minMovementSpeed = 25.f;
 
         // Minimum speed before flick / swipe logic applies.
         float minSwipeSpeed = 80.f;
@@ -70,12 +85,14 @@ private:
         float mouseSpeed = 0.f;
         float distanceToCenter = 0.f;
         float deltaSeconds = 0.f;
+        float fovEntryBlend = 0.f;
         bool isInsideFov = false;
         bool isInsideAssistDisk = false;
     };
 
     static glm::vec2 normalizeOrZero(const glm::vec2& vector);
     static float smoothStep01(float value);
+    bool hasActiveMovement(const AssistFrameContext& context) const;
 
     bool shouldApplyAssist(const AssistFrameContext& context) const;
     glm::vec2 computeAssistTargetOnRadius(const AssistFrameContext& context) const;
@@ -88,6 +105,8 @@ private:
 
     glm::vec2 computeDesiredOffset(const AssistFrameContext& context) const;
     glm::vec2 decayOffset(const AssistFrameContext& context, float decayRate) const;
+    glm::vec2 clampOffsetToMaxPixels(const glm::vec2& offset) const;
+    glm::vec2 capOffsetByFractionOfDistance(const glm::vec2& offset, float correctionDistance) const;
 
     void resetState();
     void saveFrameState(const glm::vec2& mousePosition, const glm::vec2& assistPosition, const glm::vec2& mouseVelocity);
@@ -96,15 +115,8 @@ private:
     glm::vec2 previousMousePosition_{0.f};
     glm::vec2 previousAssistPosition_{0.f};
     glm::vec2 previousMouseVelocity_{0.f};
+    float fovEntryBlend_ = 0.f;
     bool hasFrameHistory_ = false;
-
-private:
-    float kMinDeltaSeconds = 1.f / 1000.f;
-    float kRadialReleaseThreshold = 0.1f;
-    float kTangentialSwipeThreshold = 0.3f;
-    float kNaturalSpeedReference = 220.f;
-    float kMinimumAssistThreshold = 0.001f;
-
 };
 
 #endif // ASSIST_HPP
