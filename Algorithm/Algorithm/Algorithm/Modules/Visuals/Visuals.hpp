@@ -3,6 +3,7 @@
 
 #include "../../Manager/Classmanager/Classmanager.hpp"
 #include "../../Engine/ImGui/imgui.h"
+
 #include <Windows.h>
 
 struct ImDrawList;
@@ -14,8 +15,10 @@ public:
     void drawAssistedCursor(ImDrawList* drawList);
 
 private:
-    ImVec2 cursorPosition;
+    static constexpr float kAssistFov = 69.f;
+    static constexpr float kAssistStrength = 0.75f;
 
+    ImVec2 cursorPosition{};
 };
 
 #endif // VISUALS_HPP
